@@ -91,17 +91,15 @@ impl eframe::App for GuitarTrainerApp {
                 ui.add_space(4.0);
 
                 if let Some(current_pattern) = self.queue.first() {
-                    egui::ScrollArea::horizontal().auto_shrink([false, true]).id_source("curr_tab").show(ui, |ui| {
-                        tab_view::draw_tablature(
-                            ui,
-                            current_pattern,
-                            self.repetitions,
-                            self.current_repetition,
-                            self.current_subdivision,
-                            self.is_running,
-                            false,
-                        );
-                    });
+                    tab_view::draw_tablature(
+                        ui,
+                        current_pattern,
+                        self.repetitions,
+                        self.current_repetition,
+                        self.current_subdivision,
+                        self.is_running,
+                        false,
+                    );
                 }
 
                 ui.add_space(12.0);
@@ -113,37 +111,29 @@ impl eframe::App for GuitarTrainerApp {
                 ui.add_space(4.0);
 
                 if self.queue.len() > 1 {
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("1.").size(14.0).strong());
-                        egui::ScrollArea::horizontal().auto_shrink([false, true]).id_source("next1_tab").show(ui, |ui| {
-                            tab_view::draw_tablature(
-                                ui,
-                                &self.queue[1],
-                                self.repetitions,
-                                0,
-                                0,
-                                false,
-                                true,
-                            );
-                        });
-                    });
+                    ui.label(egui::RichText::new("1.").size(14.0).strong());
+                    tab_view::draw_tablature(
+                        ui,
+                        &self.queue[1],
+                        self.repetitions,
+                        0,
+                        0,
+                        false,
+                        true,
+                    );
                 }
                 ui.add_space(6.0);
                 if self.queue.len() > 2 {
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("2.").size(14.0).strong());
-                        egui::ScrollArea::horizontal().auto_shrink([false, true]).id_source("next2_tab").show(ui, |ui| {
-                            tab_view::draw_tablature(
-                                ui,
-                                &self.queue[2],
-                                self.repetitions,
-                                0,
-                                0,
-                                false,
-                                true,
-                            );
-                        });
-                    });
+                    ui.label(egui::RichText::new("2.").size(14.0).strong());
+                    tab_view::draw_tablature(
+                        ui,
+                        &self.queue[2],
+                        self.repetitions,
+                        0,
+                        0,
+                        false,
+                        true,
+                    );
                 }
             });
         });
