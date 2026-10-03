@@ -1,0 +1,17 @@
+[package]
+name = "debit-trainer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.27"
+rand = "0.8"
+
+# Gestion de l'audio natif / web
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rodio = "0.17"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["AudioContext", "OscillatorNode", "GainNode"] }
+wasm-bindgen-futures = "0.4"
+gloo-timers = "0.3"
