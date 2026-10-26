@@ -5,14 +5,16 @@ use rodio::{Decoder, OutputStream, OutputStreamHandle};
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Cursor;
 
-const CLICK_WAV: &[u8] = include_bytes!("../assets/click.wav");
+const CLICK_HIGH_WAV: &[u8] = include_bytes!("../assets/click_high.wav");
+const CLICK_LOW_WAV: &[u8] = include_bytes!("../assets/click_low.wav");
 const GUITAR_WAV: &[u8] = include_bytes!("../assets/guitar_g4.wav");
 
 #[cfg(not(target_arch = "wasm32"))]
 pub struct SoundEngine {
     _stream: OutputStream,
     stream_handle: OutputStreamHandle,
-    click_sample: Buffered<Decoder<Cursor<&'static [u8]>>>,
+    click_high_sample: Buffered<Decoder<Cursor<&'static [u8]>>>,
+    click_low_sample: Buffered<Decoder<Cursor<&'static [u8]>>>,
     guitar_sample: Buffered<Decoder<Cursor<&'static [u8]>>>,
 }
 
@@ -20,8 +22,11 @@ pub struct SoundEngine {
 impl SoundEngine {
     pub fn new() -> Self {
         let (_stream, stream_handle) = OutputStream::try_default().expect("Impossible d'initialiser la sortie audio");
-        let click_sample = Decoder::new(Cursor::new(CLICK_WAV))
-            .expect("Erreur lors du décodage de click.wav")
+        let click_high_sample = Decoder::new(Cursor::new(CLICK_HIGH_WAV))
+            .expect("Erreur lors du décodage de click_high.wav")
+            .buffered();
+        let click_low_sample = Decoder::new(Cursor::new(CLICK_LOW_WAV))
+            .expect("Erreur lors du décodage de click_low.wav")
             .buffered();
         let guitar_sample = Decoder::new(Cursor::new(GUITAR_WAV))
             .expect("Erreur lors du décodage de guitar_g4.wav")
@@ -30,7 +35,8 @@ impl SoundEngine {
         Self {
             _stream,
             stream_handle,
-            click_sample,
+            click_high_sample,
+            click_low_sample,
             guitar_sample,
         }
     }
@@ -46,12 +52,17 @@ impl SoundEngine {
         let _ = self.stream_handle.play_raw(source.convert_samples());
     }
 
-    /// Joue le clic du métronome
-    pub fn play_click(&self, volume: f32) {
+    /// Joue le clic du métronome (TIC aigu si is_accent = true, TOC grave sinon)
+    pub fn play_click(&self, volume: f32, is_accent: bool) {
         if volume <= 0.0 {
             return;
         }
-        let source = self.click_sample.clone().amplify(volume);
+        let sample = if is_accent {
+            &self.click_high_sample
+        } else {
+            &self.click_low_sample
+        };
+        let source = sample.clone().amplify(volume);
         let _ = self.stream_handle.play_raw(source.convert_samples());
     }
 }
@@ -59,7 +70,8 @@ impl SoundEngine {
 #[cfg(target_arch = "wasm32")]
 pub struct SoundEngine {
     ctx: web_sys::AudioContext,
-    click_buffer: web_sys::AudioBuffer,
+    click_high_buffer: web_sys::AudioBuffer,
+    click_low_buffer: web_sys::AudioBuffer,
     guitar_buffer: web_sys::AudioBuffer,
 }
 
@@ -99,11 +111,13 @@ fn create_audio_buffer(ctx: &web_sys::AudioContext, wav_bytes: &[u8]) -> web_sys
 impl SoundEngine {
     pub fn new() -> Self {
         let ctx = web_sys::AudioContext::new().unwrap();
-        let click_buffer = create_audio_buffer(&ctx, CLICK_WAV);
+        let click_high_buffer = create_audio_buffer(&ctx, CLICK_HIGH_WAV);
+        let click_low_buffer = create_audio_buffer(&ctx, CLICK_LOW_WAV);
         let guitar_buffer = create_audio_buffer(&ctx, GUITAR_WAV);
         Self {
             ctx,
-            click_buffer,
+            click_high_buffer,
+            click_low_buffer,
             guitar_buffer,
         }
     }
@@ -132,14 +146,20 @@ impl SoundEngine {
         let _ = source.start();
     }
 
-    pub fn play_click(&self, volume: f32) {
+    pub fn play_click(&self, volume: f32, is_accent: bool) {
         if volume <= 0.0 {
             return;
         }
         self.resume();
 
+        let buffer = if is_accent {
+            &self.click_high_buffer
+        } else {
+            &self.click_low_buffer
+        };
+
         let source = self.ctx.create_buffer_source().unwrap();
-        source.set_buffer(Some(&self.click_buffer));
+        source.set_buffer(Some(buffer));
 
         let gain = self.ctx.create_gain().unwrap();
         gain.gain().set_value(volume);

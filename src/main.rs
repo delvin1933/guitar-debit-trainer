@@ -40,6 +40,7 @@ impl eframe::App for GuitarTrainerApp {
                             self.is_running = !self.is_running;
                             self.current_subdivision = 0;
                             self.current_repetition = 0;
+                            self.metronome_beat = 0;
                         }
 
                         ui.add_space(15.0);

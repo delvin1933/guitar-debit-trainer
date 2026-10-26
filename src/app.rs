@@ -60,6 +60,7 @@ pub struct GuitarTrainerApp {
     last_tick: Instant,
     pub current_subdivision: usize, // 0 à 3 (les 4 doubles-croches du temps)
     pub current_repetition: u32,    // 0 à repetitions - 1
+    pub metronome_beat: u32,        // 0 à 3 (temps dans la mesure 4/4 : 0 = TIC, 1,2,3 = TOC)
 
     // Réglages audio
     pub enable_click: bool,
@@ -82,6 +83,7 @@ impl GuitarTrainerApp {
             last_tick: Instant::now(),
             current_subdivision: 0,
             current_repetition: 0,
+            metronome_beat: 0,
             enable_click: true,
             guitar_volume: 0.8,
             click_volume: 0.6,
@@ -124,9 +126,10 @@ impl GuitarTrainerApp {
         if self.last_tick.elapsed().as_millis() >= interval_ms as u128 {
             self.last_tick = Instant::now();
 
-            // Clic de métronome sur le début de chaque temps (subdivision 0)
+            // Clic de métronome sur le début de chaque temps (subdivision 0) : TIC sur temps 1, TOC sur temps 2, 3, 4
             if self.current_subdivision == 0 && self.enable_click {
-                self.audio.play_click(self.click_volume);
+                let is_accent = (self.metronome_beat % 4) == 0;
+                self.audio.play_click(self.click_volume, is_accent);
             }
 
             if let Some(current_pattern) = self.queue.first() {
@@ -143,6 +146,7 @@ impl GuitarTrainerApp {
             if self.current_subdivision >= 4 {
                 self.current_subdivision = 0;
                 self.current_repetition += 1;
+                self.metronome_beat = (self.metronome_beat + 1) % 4;
 
                 // Si on a complété le nombre de répétitions du bloc
                 if self.current_repetition >= self.repetitions {
