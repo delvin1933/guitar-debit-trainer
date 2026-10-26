@@ -27,9 +27,9 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install Trunk
-        uses: trunk-rs/trunk-action@v1
+        uses: taiki-e/install-action@v2
         with:
-          version: 'latest'
+          tool: trunk
 
       - name: Build WebAssembly with Trunk
         run: trunk build --release
