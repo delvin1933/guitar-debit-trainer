@@ -23,27 +23,47 @@ pub fn draw_tablature(
     let available_w = ui.available_width().max(320.0_f32);
     let total_beats = repetitions.max(1);
 
-    // Largeur minimale confortable par temps (pour éviter que les notes se chevauchent)
-    let min_beat_w = 70.0_f32 * scale;
-    let full_header_w = 84.0_f32 * scale;
-    let continuation_header_w = 44.0_f32 * scale;
-    let end_bar_w = 20.0_f32 * scale;
+    // Dimensions calibrées sur ex_tab.png
+    let max_beat_w = 95.0_f32 * scale; // Largeur exacte mesurée sur ex_tab.png (~95-98px par temps)
+    let min_beat_w = 70.0_f32 * scale; // Compression confortable sur petit écran
+    let full_header_w = 84.0_f32 * scale; // Clé 𝄞8 + 4/4 + barre reprise début |:
+    let end_bar_w = 20.0_f32 * scale; // Double barre de reprise fin :|
 
-    // Calcul réactif : est-ce que tous les temps tiennent sur 1 seule ligne fluide ?
-    let single_line_needed = full_header_w + (total_beats as f32) * min_beat_w + end_bar_w + padding_left * 2.0_f32;
-    let beats_per_line = if total_beats <= 4 {
+    // Découpage en mesures de 4/4 : jusqu'à 8 temps (2 mesures) par ligne si l'écran le permet
+    let beats_per_line = if total_beats <= 4
+        || (total_beats <= 8
+            && available_w
+                >= full_header_w
+                    + (total_beats as f32) * max_beat_w
+                    + end_bar_w
+                    + padding_left * 2.0_f32)
+    {
         total_beats
-    } else if available_w >= single_line_needed {
-        total_beats
+    } else if available_w
+        >= full_header_w + 8.0_f32 * max_beat_w + end_bar_w + padding_left * 2.0_f32
+    {
+        8
     } else {
-        4 // Découpage responsive par mesure de 4/4
+        4
     };
 
-    let num_lines = ((total_beats + beats_per_line - 1) / beats_per_line) as usize;
+    let num_lines = total_beats.div_ceil(beats_per_line) as usize;
     let total_height = (num_lines as f32) * line_staff_height + ((num_lines.saturating_sub(1)) as f32) * line_gap;
 
-    // Allocation de l'espace peintre étiré sur 100% de la largeur disponible
-    let (response, painter) = ui.allocate_painter(Vec2::new(available_w, total_height), egui::Sense::hover());
+    let max_line_beats = (beats_per_line.min(total_beats)) as f32;
+    let base_decorations_w = full_header_w + end_bar_w + padding_left * 2.0_f32;
+
+    // Calcul de la largeur de temps clamped entre 70 et 95px pour préserver la densité d'ex_tab.png
+    let usable_w = available_w - base_decorations_w;
+    let beat_w = if usable_w > 0.0 {
+        (usable_w / max_line_beats).clamp(min_beat_w, max_beat_w)
+    } else {
+        min_beat_w
+    };
+
+    // La carte de partition s'adapte à la taille réelle au lieu de s'étirer sur toute la fenêtre
+    let staff_card_w = (base_decorations_w + max_line_beats * beat_w).min(available_w);
+    let (response, painter) = ui.allocate_painter(Vec2::new(staff_card_w, total_height), egui::Sense::hover());
     let rect = response.rect;
 
     // Fond partition papier blanc/ivoire propre conforme à ex_tab.png
@@ -73,7 +93,6 @@ pub fn draw_tablature(
         let y_top = rect.min.y + (line_idx as f32) * (line_staff_height + line_gap) + padding_top;
         let staff_start_x = rect.min.x + padding_left;
         let staff_end_x = rect.max.x - padding_left;
-        let line_width = staff_end_x - staff_start_x;
 
         // 1. Tracé des 6 lignes de portée
         for s in 0..6 {
@@ -84,8 +103,8 @@ pub fn draw_tablature(
             );
         }
 
-        // 2. En-tête de ligne (Clé de sol et métrique)
-        let (header_w, notes_start_x) = if is_first_line {
+        // 2. En-tête de ligne (Clé de sol et métrique, alignement vertical identique sur toutes les lignes)
+        let notes_start_x = if is_first_line {
             let clef_x = staff_start_x + 12.0_f32 * scale;
             // Clé de sol
             painter.text(
@@ -135,9 +154,9 @@ pub fn draw_tablature(
             painter.circle_filled(Pos2::new(dots_x, y_top + line_spacing * 1.5_f32), 2.2_f32 * scale, note_color);
             painter.circle_filled(Pos2::new(dots_x, y_top + line_spacing * 3.5_f32), 2.2_f32 * scale, note_color);
 
-            (full_header_w, staff_start_x + full_header_w)
+            staff_start_x + full_header_w
         } else {
-            // Ligne de continuation : clé de sol simplifiée
+            // Ligne de continuation : clé de sol et barre d'en-tête alignée
             let clef_x = staff_start_x + 12.0_f32 * scale;
             painter.text(
                 Pos2::new(clef_x, y_top + line_spacing * 2.5_f32),
@@ -146,18 +165,13 @@ pub fn draw_tablature(
                 FontId::proportional(28.0_f32 * scale),
                 note_color,
             );
-            let bar_x = clef_x + 16.0_f32 * scale;
+            let bar_x = staff_start_x + full_header_w - 4.0_f32 * scale;
             painter.line_segment(
                 [Pos2::new(bar_x, y_top), Pos2::new(bar_x, y_top + staff_height)],
-                Stroke::new(1.5_f32 * scale, note_color),
+                Stroke::new(1.2_f32 * scale, staff_line_color),
             );
-            (continuation_header_w, staff_start_x + continuation_header_w)
+            staff_start_x + full_header_w
         };
-
-        // 3. Calcul fluide de la largeur par temps pour remplir 100% de la ligne
-        let end_decor_w = if is_last_line { end_bar_w } else { 6.0_f32 * scale };
-        let usable_width = (line_width - header_w - end_decor_w).max(line_beats_count * min_beat_w);
-        let dynamic_beat_w = usable_width / line_beats_count;
 
         let d_string_y = y_top + 3.0_f32 * line_spacing; // 4ème ligne = Corde de Ré
         let stem_bottom_y = y_top + staff_height + 18.0_f32 * scale;
@@ -174,9 +188,9 @@ pub fn draw_tablature(
             }
 
             let is_current_rep = is_running && rep == current_rep;
-            let sub_w = dynamic_beat_w / 4.0_f32;
+            let sub_w = beat_w / 4.0_f32;
 
-            for sub in 0..4 {
+            for (sub, &label) in stroke_labels.iter().enumerate() {
                 let note_x = current_x + (sub as f32 + 0.5_f32) * sub_w;
                 let is_played = pattern.strokes[sub];
                 let is_active_sub = is_current_rep && sub == current_sub;
@@ -188,7 +202,7 @@ pub fn draw_tablature(
                     painter.text(
                         Pos2::new(note_x, y_top - 12.0_f32 * scale),
                         egui::Align2::CENTER_CENTER,
-                        stroke_labels[sub],
+                        label,
                         FontId::monospace(stroke_font_size),
                         stroke_color,
                     );
@@ -261,31 +275,39 @@ pub fn draw_tablature(
                 active_color,
             );
 
-            // Séparateur de temps discret
-            let beat_end_x = current_x + dynamic_beat_w;
-            painter.line_segment(
-                [Pos2::new(beat_end_x, y_top), Pos2::new(beat_end_x, y_top + staff_height)],
-                Stroke::new(0.6_f32 * scale, Color32::from_rgb(205, 205, 210)),
-            );
+            // Séparateur de temps discret entre les temps d'une même mesure
+            if rep + 1 < end_beat && (rep + 1) % 4 != 0 {
+                let beat_end_x = current_x + beat_w;
+                painter.line_segment(
+                    [Pos2::new(beat_end_x, y_top), Pos2::new(beat_end_x, y_top + staff_height)],
+                    Stroke::new(0.6_f32 * scale, Color32::from_rgb(215, 215, 220)),
+                );
+            }
 
-            current_x += dynamic_beat_w;
+            current_x += beat_w;
         }
 
         // 4. Barre de fin de mesure ou de reprise :|
+        let end_x = if (line_beats_count - max_line_beats).abs() < f32::EPSILON {
+            staff_end_x
+        } else {
+            current_x + end_bar_w
+        };
+
         if is_last_line {
             painter.line_segment(
-                [Pos2::new(staff_end_x - 6.0_f32 * scale, y_top), Pos2::new(staff_end_x - 6.0_f32 * scale, y_top + staff_height)],
+                [Pos2::new(end_x - 6.0_f32 * scale, y_top), Pos2::new(end_x - 6.0_f32 * scale, y_top + staff_height)],
                 Stroke::new(1.0_f32, note_color),
             );
             painter.line_segment(
-                [Pos2::new(staff_end_x - 2.0_f32 * scale, y_top), Pos2::new(staff_end_x - 2.0_f32 * scale, y_top + staff_height)],
+                [Pos2::new(end_x - 2.0_f32 * scale, y_top), Pos2::new(end_x - 2.0_f32 * scale, y_top + staff_height)],
                 Stroke::new(3.0_f32 * scale, note_color),
             );
-            painter.circle_filled(Pos2::new(staff_end_x - 12.0_f32 * scale, y_top + line_spacing * 1.5_f32), 2.2_f32 * scale, note_color);
-            painter.circle_filled(Pos2::new(staff_end_x - 12.0_f32 * scale, y_top + line_spacing * 3.5_f32), 2.2_f32 * scale, note_color);
+            painter.circle_filled(Pos2::new(end_x - 12.0_f32 * scale, y_top + line_spacing * 1.5_f32), 2.2_f32 * scale, note_color);
+            painter.circle_filled(Pos2::new(end_x - 12.0_f32 * scale, y_top + line_spacing * 3.5_f32), 2.2_f32 * scale, note_color);
         } else {
             painter.line_segment(
-                [Pos2::new(staff_end_x - 2.0_f32 * scale, y_top), Pos2::new(staff_end_x - 2.0_f32 * scale, y_top + staff_height)],
+                [Pos2::new(end_x - 2.0_f32 * scale, y_top), Pos2::new(end_x - 2.0_f32 * scale, y_top + staff_height)],
                 Stroke::new(1.5_f32 * scale, staff_line_color),
             );
         }
@@ -293,6 +315,7 @@ pub fn draw_tablature(
 }
 
 /// Trace les doubles ligatures (beams) pour les 4 subdivisions d'un temps
+#[allow(clippy::too_many_arguments)]
 fn draw_beams(
     painter: &egui::Painter,
     strokes: &[bool; 4],

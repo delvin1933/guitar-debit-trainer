@@ -1,6 +1,6 @@
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use std::time::Instant;
+use web_time::Instant;
 
 use crate::audio::SoundEngine;
 
@@ -12,10 +12,18 @@ pub struct Pattern {
 impl Pattern {
     pub fn all_3_note_patterns() -> Vec<Self> {
         vec![
-            Pattern { strokes: [false, true, true, true] },
-            Pattern { strokes: [true, false, true, true] },
-            Pattern { strokes: [true, true, false, true] },
-            Pattern { strokes: [true, true, true, false] },
+            Pattern {
+                strokes: [false, true, true, true],
+            },
+            Pattern {
+                strokes: [true, false, true, true],
+            },
+            Pattern {
+                strokes: [true, true, false, true],
+            },
+            Pattern {
+                strokes: [true, true, true, false],
+            },
         ]
     }
 
@@ -33,8 +41,7 @@ impl Pattern {
     #[allow(dead_code)]
     pub fn display_block(&self, repetitions: u32) -> String {
         let single = self.display_string();
-        std::iter::repeat(single)
-            .take(repetitions.max(1) as usize)
+        std::iter::repeat_n(single, repetitions.max(1) as usize)
             .collect::<Vec<_>>()
             .join("   |   ")
     }
@@ -47,7 +54,7 @@ pub struct GuitarTrainerApp {
     pub repetitions: u32, // Nombre de répétitions par bloc (1 à 10)
     pub queue: Vec<Pattern>,
     pub is_running: bool,
-    
+
     // Audio & Métrique
     audio: SoundEngine,
     last_tick: Instant,
@@ -81,6 +88,10 @@ impl GuitarTrainerApp {
         };
         app.refill_queue();
         app
+    }
+
+    pub fn resume_audio(&self) {
+        self.audio.resume();
     }
 
     pub fn refill_queue(&mut self) {
@@ -162,9 +173,14 @@ mod tests {
 
     #[test]
     fn test_pattern_display_block() {
-        let p = Pattern { strokes: [true, false, true, true] };
+        let p = Pattern {
+            strokes: [true, false, true, true],
+        };
         assert_eq!(p.display_block(1), "B  -  B  H");
-        assert_eq!(p.display_block(3), "B  -  B  H   |   B  -  B  H   |   B  -  B  H");
+        assert_eq!(
+            p.display_block(3),
+            "B  -  B  H   |   B  -  B  H   |   B  -  B  H"
+        );
     }
 
     #[test]
