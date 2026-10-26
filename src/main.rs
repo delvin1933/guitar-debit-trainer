@@ -13,82 +13,101 @@ impl eframe::App for GuitarTrainerApp {
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
+                    let is_narrow = ui.available_width() < 640.0;
+
                     ui.heading("Entraînement au Débit Guitare (3 notes sur 4)");
                     ui.add_space(6.0);
 
                     // Bouton START / STOP, Tempo (BPM) et Répétitions par bloc
-                    ui.horizontal(|ui| {
-                        let start_btn_text = if self.is_running {
-                            "⏸ PAUSE"
-                        } else {
-                            "▶ START"
-                        };
-                        let btn_color = if self.is_running {
+                    let render_start_btn = |ui: &mut egui::Ui, app: &mut GuitarTrainerApp| {
+                        let start_btn_text = if app.is_running { "⏸ PAUSE" } else { "▶ START" };
+                        let btn_color = if app.is_running {
                             egui::Color32::from_rgb(200, 60, 60)
                         } else {
                             egui::Color32::from_rgb(60, 180, 60)
                         };
 
                         if ui
-                            .add_sized(
-                                [100.0, 30.0],
-                                egui::Button::new(start_btn_text).fill(btn_color),
-                            )
+                            .add_sized([100.0, 30.0], egui::Button::new(start_btn_text).fill(btn_color))
                             .clicked()
                         {
-                            self.resume_audio();
-                            self.is_running = !self.is_running;
-                            self.current_subdivision = 0;
-                            self.current_repetition = 0;
-                            self.metronome_beat = 0;
+                            app.resume_audio();
+                            app.is_running = !app.is_running;
+                            app.current_subdivision = 0;
+                            app.current_repetition = 0;
+                            app.metronome_beat = 0;
                         }
+                    };
 
-                        ui.add_space(15.0);
+                    let render_bpm = |ui: &mut egui::Ui, app: &mut GuitarTrainerApp| {
                         ui.label("Tempo (BPM) :");
-                        ui.add(egui::Slider::new(&mut self.bpm, 40..=220));
+                        ui.add(egui::Slider::new(&mut app.bpm, 40..=220));
+                    };
 
-                        ui.add_space(20.0);
-                        let prev_reps = self.repetitions;
+                    let render_reps = |ui: &mut egui::Ui, app: &mut GuitarTrainerApp| {
+                        let prev_reps = app.repetitions;
                         egui::ComboBox::from_label("Répétitions par bloc")
-                            .selected_text(format!("{} fois", self.repetitions))
+                            .selected_text(format!("{} fois", app.repetitions))
                             .show_ui(ui, |ui| {
                                 for n in 1..=10 {
-                                    ui.selectable_value(
-                                        &mut self.repetitions,
-                                        n,
-                                        format!("{} fois", n),
-                                    );
+                                    ui.selectable_value(&mut app.repetitions, n, format!("{} fois", n));
                                 }
                             });
-                        if self.repetitions != prev_reps
-                            && self.current_repetition >= self.repetitions
-                        {
-                            self.current_repetition = 0;
+                        if app.repetitions != prev_reps && app.current_repetition >= app.repetitions {
+                            app.current_repetition = 0;
                         }
-                    });
+                    };
 
-                    ui.add_space(4.0);
+                    if is_narrow {
+                        ui.horizontal(|ui| {
+                            render_start_btn(ui, self);
+                            ui.add_space(10.0);
+                            render_bpm(ui, self);
+                        });
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            render_reps(ui, self);
+                        });
+                    } else {
+                        ui.horizontal(|ui| {
+                            render_start_btn(ui, self);
+                            ui.add_space(15.0);
+                            render_bpm(ui, self);
+                            ui.add_space(20.0);
+                            render_reps(ui, self);
+                        });
+                    }
+
+                    ui.add_space(6.0);
 
                     // Réglages audio (Clic & Volumes)
-                    ui.horizontal(|ui| {
+                    if is_narrow {
                         ui.checkbox(&mut self.enable_click, "🔔 Clic métronome");
-                        ui.add_space(15.0);
-                        ui.label("Vol. Guitare :");
-                        ui.add(
-                            egui::Slider::new(&mut self.guitar_volume, 0.0..=1.0).show_value(false),
-                        );
-                        ui.add_space(10.0);
-                        ui.label("Vol. Clic :");
-                        ui.add(
-                            egui::Slider::new(&mut self.click_volume, 0.0..=1.0).show_value(false),
-                        );
-                    });
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label("Vol. Guitare :");
+                            ui.add(egui::Slider::new(&mut self.guitar_volume, 0.0..=1.0).show_value(false));
+                            ui.add_space(8.0);
+                            ui.label("Vol. Clic :");
+                            ui.add(egui::Slider::new(&mut self.click_volume, 0.0..=1.0).show_value(false));
+                        });
+                    } else {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.enable_click, "🔔 Clic métronome");
+                            ui.add_space(15.0);
+                            ui.label("Vol. Guitare :");
+                            ui.add(egui::Slider::new(&mut self.guitar_volume, 0.0..=1.0).show_value(false));
+                            ui.add_space(10.0);
+                            ui.label("Vol. Clic :");
+                            ui.add(egui::Slider::new(&mut self.click_volume, 0.0..=1.0).show_value(false));
+                        });
+                    }
 
                     ui.separator();
 
                     // Sélection des variations incluses
                     ui.label(egui::RichText::new("Variations à inclure :").strong());
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         let mut changed = false;
                         for idx in 0..self.all_patterns.len() {
                             let label = self.all_patterns[idx].display_string();

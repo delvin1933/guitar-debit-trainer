@@ -11,7 +11,13 @@ pub fn draw_tablature(
     is_running: bool,
     is_compact: bool,
 ) {
-    let scale = if is_compact { 0.85_f32 } else { 1.0_f32 };
+    let available_w = ui.available_width().max(280.0_f32);
+    let total_beats = repetitions.max(1);
+
+    // Échelle réactive fluide pour petits écrans et mobiles (< 520px)
+    let responsive_factor = (available_w / 520.0_f32).clamp(0.65_f32, 1.0_f32);
+    let scale = (if is_compact { 0.85_f32 } else { 1.0_f32 }) * responsive_factor;
+
     let line_spacing = 9.0_f32 * scale;
     let staff_height = 5.0_f32 * line_spacing;
     let padding_left = 14.0_f32 * scale;
@@ -19,9 +25,6 @@ pub fn draw_tablature(
     let bottom_margin = 34.0_f32 * scale; // Espace pour les hampes et doubles ligatures
     let line_staff_height = padding_top + staff_height + bottom_margin;
     let line_gap = 14.0_f32 * scale;
-
-    let available_w = ui.available_width().max(320.0_f32);
-    let total_beats = repetitions.max(1);
 
     // Dimensions calibrées sur ex_tab.png
     let max_beat_w = 95.0_f32 * scale; // Largeur exacte mesurée sur ex_tab.png (~95-98px par temps)
