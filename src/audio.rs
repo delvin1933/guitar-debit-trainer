@@ -68,11 +68,16 @@ impl SoundEngine {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub struct SoundEngine {
+struct WasmAudioState {
     ctx: web_sys::AudioContext,
     click_high_buffer: web_sys::AudioBuffer,
     click_low_buffer: web_sys::AudioBuffer,
     guitar_buffer: web_sys::AudioBuffer,
+}
+
+#[cfg(target_arch = "wasm32")]
+pub struct SoundEngine {
+    state: std::cell::RefCell<Option<WasmAudioState>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -110,21 +115,31 @@ fn create_audio_buffer(ctx: &web_sys::AudioContext, wav_bytes: &[u8]) -> web_sys
 #[cfg(target_arch = "wasm32")]
 impl SoundEngine {
     pub fn new() -> Self {
-        let ctx = web_sys::AudioContext::new().unwrap();
-        let click_high_buffer = create_audio_buffer(&ctx, CLICK_HIGH_WAV);
-        let click_low_buffer = create_audio_buffer(&ctx, CLICK_LOW_WAV);
-        let guitar_buffer = create_audio_buffer(&ctx, GUITAR_WAV);
+        // Ne PAS créer l'AudioContext ici au démarrage pour éviter l'avertissement d'autoplay du navigateur.
         Self {
-            ctx,
-            click_high_buffer,
-            click_low_buffer,
-            guitar_buffer,
+            state: std::cell::RefCell::new(None),
         }
     }
 
     pub fn resume(&self) {
-        if self.ctx.state() == web_sys::AudioContextState::Suspended {
-            let _ = self.ctx.resume();
+        let mut state_guard = self.state.borrow_mut();
+        if state_guard.is_none() {
+            // Créé lors du premier geste utilisateur (clic START) : zéro avertissement du navigateur
+            if let Ok(ctx) = web_sys::AudioContext::new() {
+                let click_high_buffer = create_audio_buffer(&ctx, CLICK_HIGH_WAV);
+                let click_low_buffer = create_audio_buffer(&ctx, CLICK_LOW_WAV);
+                let guitar_buffer = create_audio_buffer(&ctx, GUITAR_WAV);
+                *state_guard = Some(WasmAudioState {
+                    ctx,
+                    click_high_buffer,
+                    click_low_buffer,
+                    guitar_buffer,
+                });
+            }
+        } else if let Some(ref s) = *state_guard {
+            if s.ctx.state() == web_sys::AudioContextState::Suspended {
+                let _ = s.ctx.resume();
+            }
         }
     }
 
@@ -134,16 +149,18 @@ impl SoundEngine {
         }
         self.resume();
 
-        let source = self.ctx.create_buffer_source().unwrap();
-        source.set_buffer(Some(&self.guitar_buffer));
+        if let Some(ref s) = *self.state.borrow() {
+            let source = s.ctx.create_buffer_source().unwrap();
+            source.set_buffer(Some(&s.guitar_buffer));
 
-        let gain = self.ctx.create_gain().unwrap();
-        gain.gain().set_value(volume);
+            let gain = s.ctx.create_gain().unwrap();
+            gain.gain().set_value(volume);
 
-        let _ = source.connect_with_audio_node(&gain);
-        let _ = gain.connect_with_audio_node(&self.ctx.destination());
+            let _ = source.connect_with_audio_node(&gain);
+            let _ = gain.connect_with_audio_node(&s.ctx.destination());
 
-        let _ = source.start();
+            let _ = source.start();
+        }
     }
 
     pub fn play_click(&self, volume: f32, is_accent: bool) {
@@ -152,21 +169,23 @@ impl SoundEngine {
         }
         self.resume();
 
-        let buffer = if is_accent {
-            &self.click_high_buffer
-        } else {
-            &self.click_low_buffer
-        };
+        if let Some(ref s) = *self.state.borrow() {
+            let buffer = if is_accent {
+                &s.click_high_buffer
+            } else {
+                &s.click_low_buffer
+            };
 
-        let source = self.ctx.create_buffer_source().unwrap();
-        source.set_buffer(Some(buffer));
+            let source = s.ctx.create_buffer_source().unwrap();
+            source.set_buffer(Some(buffer));
 
-        let gain = self.ctx.create_gain().unwrap();
-        gain.gain().set_value(volume);
+            let gain = s.ctx.create_gain().unwrap();
+            gain.gain().set_value(volume);
 
-        let _ = source.connect_with_audio_node(&gain);
-        let _ = gain.connect_with_audio_node(&self.ctx.destination());
+            let _ = source.connect_with_audio_node(&gain);
+            let _ = gain.connect_with_audio_node(&s.ctx.destination());
 
-        let _ = source.start();
+            let _ = source.start();
+        }
     }
 }
